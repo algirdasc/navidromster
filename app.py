@@ -51,23 +51,30 @@ PLAYER_HTML = """<!doctype html>
   @keyframes disco{0%{background:#16161e}20%{background:#3b0764}40%{background:#7c2d12}
                    60%{background:#134e4a}80%{background:#4a044e}100%{background:#16161e}}
   button{width:70vmin;height:70vmin;max-width:20rem;max-height:20rem;border-radius:50%;border:none;
-         font-size:4rem;color:#fff;cursor:pointer;
+         font-size:4rem;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
          background:radial-gradient(circle,#e91e63 0 24%,transparent 25%),
                     repeating-radial-gradient(circle,#151515 0 2px,#232323 2px 4px);
          box-shadow:0 0 40px rgba(0,0,0,.8)}
+  #i.play{width:0;height:0;margin-left:1.2rem;border-left:4rem solid #fff;
+          border-top:2.3rem solid transparent;border-bottom:2.3rem solid transparent}
+  #i.pause{width:2rem;height:4.4rem;border-left:1.2rem solid #fff;border-right:1.2rem solid #fff}
+  #confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+  #confetti i{position:absolute;top:-4vh;width:1rem;height:1.5rem;opacity:.9}
+  body.playing #confetti i{animation:fall linear infinite}
+  @keyframes fall{to{transform:translateY(115vh) rotate(720deg)}}
   body.playing button{animation:spin 3s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   body.playing::after{content:'🎵  🎶  🎵';position:fixed;bottom:8vh;left:0;right:0;
                       text-align:center;font-size:3rem;animation:bounce 1s ease-in-out infinite alternate}
   @keyframes bounce{to{transform:translateY(-4vh) scale(1.15)}}
 </style>
-<button id="b">&#9654;</button>
+<button id="b"><span id="i" class="play"></span></button>
 <p id="m" style="color:#888;position:fixed;bottom:2rem;left:0;right:0;text-align:center"></p>
 <audio id="a" preload="auto"></audio>
 <script>
   const id = new URLSearchParams(location.search).get('s');
   const a = document.getElementById('a'), b = document.getElementById('b'),
-        m = document.getElementById('m');
+        m = document.getElementById('m'), i = document.getElementById('i');
   if (!id) {
     b.style.display = 'none';
     m.textContent = 'No song here — scan a card QR code.';
@@ -75,12 +82,21 @@ PLAYER_HTML = """<!doctype html>
     a.src = '/stream?s=' + encodeURIComponent(id);
     a.onerror = () => { b.textContent = '❌'; b.disabled = true; m.textContent = 'Song unavailable.'; };
     b.onclick = () => a.paused ? a.play() : a.pause();
-    a.addEventListener('play', () => document.body.classList.add('playing'));
-    a.addEventListener('pause', () => document.body.classList.remove('playing'));
+    a.onplay = () => { i.className = 'pause'; document.body.classList.add('playing'); };
+    a.onpause = () => { i.className = 'play'; document.body.classList.remove('playing'); };
     a.play().catch(() => {});
-    a.onplay = () => b.textContent = '\\u23f8';
-    a.onpause = () => b.textContent = '\\u25b6';
   }
+
+  const conf = document.createElement('div');
+  conf.id = 'confetti';
+  for (let n = 0; n < 50; n++) {
+    const c = document.createElement('i');
+    c.style.cssText = 'left:' + Math.random() * 100 + '%;background:hsl(' +
+      Math.random() * 360 + ',90%,60%);animation-delay:-' + Math.random() * 5 +
+      's;animation-duration:' + (3 + Math.random() * 3) + 's';
+    conf.appendChild(c);
+  }
+  document.body.appendChild(conf);
 </script>
 """
 
