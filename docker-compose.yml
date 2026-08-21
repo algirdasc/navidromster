@@ -1,0 +1,7 @@
+services:
+  navidromster:
+    image: ghcr.io/algirdasc/navidromster:latest
+    env_file: .env
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    restart: unless-stopped
