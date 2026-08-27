@@ -131,12 +131,23 @@ CARDS_HTML = """<!doctype html>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>window.PLAYER_URL = __PLAYER_URL__;</script>
 <style>
-  body{font-family:sans-serif;margin:1rem}
-  .controls{display:flex;gap:1rem;align-items:end;flex-wrap:wrap;margin-bottom:.5rem}
-  label{display:flex;flex-direction:column;font-size:.85rem}
-  .hint{font-size:.8rem;color:#a33;max-width:60rem}
-  .page{width:210mm;height:297mm;box-sizing:border-box;padding:10mm;display:grid}
-  input[type=file]{font-size:.75rem;max-width:11rem}
+  :root{color-scheme:dark}
+  body{font-family:sans-serif;margin:0;padding:1.5rem;background:#16161e;color:#eee}
+  .controls{display:flex;gap:1.2rem;align-items:end;flex-wrap:wrap;margin-bottom:.8rem;
+            background:#1e1e2a;padding:1.2rem;border-radius:.7rem;box-shadow:0 2px 12px rgba(0,0,0,.4)}
+  label{display:flex;flex-direction:column;gap:.35rem;font-size:.8rem;color:#aaa}
+  select,input{padding:.45rem .6rem;font-size:.9rem;border-radius:.4rem;border:1px solid #444;
+               background:#23232e;color:#eee}
+  select:focus,input:focus{outline:none;border-color:#e91e63}
+  input[type=file]{font-size:.75rem;max-width:11rem;color:#888}
+  button{padding:.55rem 1.3rem;font-size:.9rem;border-radius:.4rem;border:1px solid #444;
+         background:#23232e;color:#eee;cursor:pointer}
+  button:hover{border-color:#e91e63}
+  button.primary{background:#e91e63;border-color:#e91e63;color:#fff;font-weight:600}
+  button.primary:hover{background:#f53c7f}
+  .hint{font-size:.8rem;color:#888;max-width:60rem}
+  #out{padding-bottom:2rem}
+  .page{width:210mm;height:297mm;box-sizing:border-box;padding:10mm;display:grid;background:#fff;color:#000}
   img.art{max-height:22%;max-width:100%;object-fit:contain}
   .qrbox{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
   .qrbox img,.qrbox canvas{max-width:100%;max-height:100%;width:auto;height:auto}
@@ -147,9 +158,10 @@ CARDS_HTML = """<!doctype html>
   .year{font-size:1.9em;font-weight:800}
   .artist{font-weight:700;margin-top:.8em}
   .title{margin-top:.25em}
-  @media screen{.page{border:1px solid #ccc;margin:0 auto 1rem}}
+  @media screen{.page{border-radius:.3rem;box-shadow:0 4px 24px rgba(0,0,0,.5);margin:0 auto 2rem}}
   @media print{
-    .controls,.hint{display:none}
+    body{background:#fff;padding:0}
+    .controls,.hint,#err{display:none}
     @page{size:A4;margin:0}
     .page{page-break-after:always;margin:0}
     .page:last-child{page-break-after:auto}
@@ -170,7 +182,7 @@ CARDS_HTML = """<!doctype html>
   <label>QR footer <input type="file" accept="image/*" data-k="frontFoot"></label>
   <label>Answer header <input type="file" accept="image/*" data-k="backHead"></label>
   <label>Answer footer <input type="file" accept="image/*" data-k="backFoot"></label>
-  <button onclick="gen()">Generate</button>
+  <button class="primary" onclick="gen()">Generate</button>
   <button onclick="print()">Print</button>
 </div>
 <p id="err" style="color:#c00;font-weight:600"></p>
