@@ -1,6 +1,6 @@
 """Smoke test: stubs Navidrome, verifies proxying, auth params, and Range passthrough."""
 
-import base64
+import hashlib
 import json
 import os
 import threading
@@ -65,14 +65,43 @@ def main():
     base = f"http://127.0.0.1:{server.server_address[1]}"
 
     def authed(path):
-        token = base64.b64encode(b"cu:cp").decode()
-        req = urllib.request.Request(base + path, headers={"Authorization": "Basic " + token})
+        req = urllib.request.Request(base + path, headers={"Cookie": cookie})
         return urllib.request.urlopen(req)
 
-    for path in ("/cards", "/playlists", "/playlist?id=pl1"):
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a):
+            return None
+
+    no_redirect = urllib.request.build_opener(NoRedirect)
+
+    login = urllib.request.Request(base + "/login",
+                                   data=urllib.parse.urlencode({"u": "cu", "p": "cp"}).encode())
+    try:
+        no_redirect.open(login)
+        raise AssertionError("login should redirect")
+    except urllib.error.HTTPError as e:
+        assert e.code == 303, e.code
+        cookie = e.headers["Set-Cookie"].split(";")[0]
+        assert cookie == "navidromster_session=" + hashlib.sha256(b"cu:cp").hexdigest()[:32]
+
+    bad_login = urllib.request.Request(base + "/login",
+                                       data=urllib.parse.urlencode({"u": "cu", "p": "wrong"}).encode())
+    try:
+        no_redirect.open(bad_login)
+        raise AssertionError("bad login should fail")
+    except urllib.error.HTTPError as e:
+        assert e.code == 401, e.code
+
+    try:
+        no_redirect.open(base + "/cards")
+        raise AssertionError("/cards should redirect to /login")
+    except urllib.error.HTTPError as e:
+        assert e.code == 303 and e.headers["Location"] == "/login", (e.code, e.headers.get("Location"))
+
+    for path in ("/playlists", "/playlist?id=pl1"):
         try:
             urllib.request.urlopen(base + path)
-            raise AssertionError(path + " should require auth")
+            raise AssertionError(path + " should require login")
         except urllib.error.HTTPError as e:
             assert e.code == 401, (path, e.code)
 
