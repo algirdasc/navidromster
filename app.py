@@ -11,10 +11,10 @@ Env:
     NAVIDROMSTER_FORMAT  Navidrome stream format (default mp3; "raw" = original files)
     NAVIDROMSTER_INSECURE  set to 1 to skip SSL certificate verification (self-signed certs)
     PLAYER_URL      public base URL used in QR codes (default: address in the browser bar)
-    NAVIDROMSTER_USER / NAVIDROMSTER_PASSWORD  basic auth for the cards page and its API (unset = open)
+    NAVIDROMSTER_USER / NAVIDROMSTER_PASSWORD  login for the cards page and its API (unset = open)
 """
 
-import base64
+import hashlib
 import hmac
 import json
 import logging
@@ -40,6 +40,30 @@ log = logging.getLogger("navidromster")
 SSL_CONTEXT = ssl._create_unverified_context() if os.environ.get("NAVIDROMSTER_INSECURE") else None
 
 AUTH_PARAMS = {"u": NAVIDROME_USER, "p": "enc:" + NAVIDROME_PASSWORD.encode().hex()}
+
+SESSION_COOKIE = "navidromster_session"
+SESSION_TOKEN = hashlib.sha256(f"{APP_USER}:{APP_PASSWORD}".encode()).hexdigest()[:32] if (APP_USER and APP_PASSWORD) else ""
+
+LOGIN_HTML = """<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Navidromster login</title>
+<style>
+  body{margin:0;height:100vh;display:grid;place-items:center;background:#16161e;font-family:sans-serif;color:#eee}
+  form{display:flex;flex-direction:column;gap:1rem;width:16rem}
+  input,button{padding:.7rem;font-size:1rem;border-radius:.4rem;border:1px solid #444}
+  input{background:#23232e;color:#eee}
+  button{background:#e91e63;color:#fff;border:none;cursor:pointer}
+  #err{color:#f66;font-weight:600;min-height:1.2em}
+</style>
+<form method="post" action="/login">
+  <h2>&#127925; Navidromster</h2>
+  <div id="err">__ERROR__</div>
+  <input name="u" placeholder="Username" autocomplete="username" required autofocus>
+  <input name="p" type="password" placeholder="Password" autocomplete="current-password" required>
+  <button>Log in</button>
+</form>
+"""
 
 PLAYER_HTML = """<!doctype html>
 <meta charset="utf-8">
@@ -292,23 +316,52 @@ def make_handler():
             self.end_headers()
             self.wfile.write(raw)
 
-        def authorized(self):
-            if not (APP_USER and APP_PASSWORD):
+        def authorized(self, wants_json):
+            if not SESSION_TOKEN:
                 return True
-            expected = "Basic " + base64.b64encode(
-                f"{APP_USER}:{APP_PASSWORD}".encode()).decode()
-            if hmac.compare_digest(self.headers.get("Authorization", ""), expected):
+            cookies = urllib.parse.parse_qsl(
+                self.headers.get("Cookie", "").replace("; ", "&"))
+            token = dict(cookies).get(SESSION_COOKIE, "")
+            if hmac.compare_digest(token, SESSION_TOKEN):
                 return True
-            self.send_response(401)
-            self.send_header("WWW-Authenticate", 'Basic realm="navidromster"')
-            self.send_header("Content-Length", "0")
-            self.end_headers()
+            if wants_json:
+                self.send_body(json.dumps({"error": "Not logged in"}),
+                               "application/json", status=401)
+            else:
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
             return False
+
+        def do_POST(self):
+            url = urllib.parse.urlparse(self.path)
+            if url.path != "/login":
+                self.send_error(404)
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            form = dict(urllib.parse.parse_qsl(self.rfile.read(length).decode()))
+            if hmac.compare_digest(form.get("u", ""), APP_USER) and \
+               hmac.compare_digest(form.get("p", ""), APP_PASSWORD):
+                self.send_response(303)
+                self.send_header("Set-Cookie",
+                                 f"{SESSION_COOKIE}={SESSION_TOKEN}; HttpOnly; SameSite=Lax; Path=/")
+                self.send_header("Location", "/cards")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                log.warning("login failed for user %r", form.get("u", ""))
+                self.send_body(LOGIN_HTML.replace("__ERROR__", "Wrong username or password."),
+                               "text/html; charset=utf-8", status=401)
 
         def do_GET(self):
             url = urllib.parse.urlparse(self.path)
-            if url.path in ("/", "/cards", "/playlists", "/playlist") and not self.authorized():
+            if url.path == "/login":
+                self.send_body(LOGIN_HTML.replace("__ERROR__", ""), "text/html; charset=utf-8")
                 return
+            if url.path in ("/", "/cards", "/playlists", "/playlist"):
+                if not self.authorized(url.path.startswith("/playlist")):
+                    return
             q = urllib.parse.parse_qs(url.query)
             try:
                 if url.path in ("/", "/cards"):
@@ -367,7 +420,7 @@ def main():
     if SSL_CONTEXT:
         log.warning("SSL certificate verification DISABLED (NAVIDROMSTER_INSECURE is set)")
     log.info("navidromster on http://0.0.0.0:%s — cards: /cards, player: /play", PORT)
-    log.info("cards page: %s", "basic auth ON" if (APP_USER and APP_PASSWORD)
+    log.info("cards page: %s", "login ON" if SESSION_TOKEN
              else "OPEN — set NAVIDROMSTER_USER/NAVIDROMSTER_PASSWORD to protect")
     ThreadingHTTPServer(("0.0.0.0", PORT), make_handler()).serve_forever()
 
