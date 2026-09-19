@@ -300,12 +300,15 @@ async function gen() {
 """
 
 
+BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+              "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+
 def navidrome(endpoint, **params):
     query = {**AUTH_PARAMS, "v": "1.16.1", "c": "navidromster", **params}
     return urllib.request.Request(
         f"{NAVIDROME_URL}/rest/{endpoint}?{urllib.parse.urlencode(query)}",
-        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"})
+        headers={"User-Agent": BROWSER_UA})
 
 
 def navidrome_json(endpoint, **params):
@@ -316,6 +319,25 @@ def navidrome_json(endpoint, **params):
         log.error("navidrome: %s failed: %s", endpoint, data)
         raise RuntimeError(data)
     return data
+
+
+TOKEN = ""
+
+
+def playlist_tracks(playlist_id):
+    # ponytail: token cached for process lifetime; re-login on 401 if sessions ever expire mid-run
+    global TOKEN
+    if not TOKEN:
+        req = urllib.request.Request(NAVIDROME_URL + "/auth/login",
+            data=json.dumps({"username": NAVIDROME_USER, "password": NAVIDROME_PASSWORD}).encode(),
+            headers={"Content-Type": "application/json", "User-Agent": BROWSER_UA})
+        with urllib.request.urlopen(req, context=SSL_CONTEXT) as r:
+            TOKEN = json.load(r)["token"]
+    req = urllib.request.Request(
+        f"{NAVIDROME_URL}/api/playlist/{playlist_id}/tracks?_start=0&_end=10000",
+        headers={"X-ND-Authorization": "Bearer " + TOKEN, "User-Agent": BROWSER_UA})
+    with urllib.request.urlopen(req, context=SSL_CONTEXT) as r:
+        return json.load(r)
 
 
 def make_handler():
@@ -388,20 +410,20 @@ def make_handler():
                         for p in pls
                     ]), "application/json")
                 elif url.path == "/playlist":
-                    pl = navidrome_json("getPlaylist", id=q["id"][0]).get("playlist", {})
-                    # ponytail: one getAlbum per unique album, no persistent cache; add one if playlist loads get slow
-                    orig_years = {}
-                    for s in pl.get("entry", []):
-                        aid = s.get("albumId")
-                        if aid and aid not in orig_years:
-                            al = navidrome_json("getAlbum", id=aid).get("album", {})
-                            orig_years[aid] = (al.get("originalReleaseDate") or {}).get("year")
-                    self.send_body(json.dumps([
-                        {"id": s["id"], "artist": s.get("artist", "?"),
-                         "title": s.get("title", "?"),
-                         "year": orig_years.get(s.get("albumId")) or s.get("year", "?")}
-                        for s in pl.get("entry", [])
-                    ]), "application/json")
+                    tracks = playlist_tracks(q["id"][0])
+                    # ponytail: getAlbum only for tracks with neither originalDate nor year; usually zero extra calls
+                    album_dates = {}
+                    for t in tracks:
+                        aid = t.get("albumId")
+                        if aid and not t.get("originalDate") and not t.get("year") and aid not in album_dates:
+                            d = navidrome_json("getAlbum", id=aid).get("album", {}).get("originalReleaseDate") or {}
+                            album_dates[aid] = ("-".join([str(d["year"])] + [f"{d[k]:02d}" for k in ("month", "day") if d.get(k)])
+                                                if d.get("year") else None)
+                    songs = [{"id": t["id"], "artist": t.get("artist", "?"), "title": t.get("title", "?"),
+                              "year": t.get("originalDate") or t.get("year")
+                                      or album_dates.get(t.get("albumId")) or "?"}
+                             for t in tracks]
+                    self.send_body(json.dumps(songs), "application/json")
                 elif url.path == "/stream":
                     self.stream(q["s"][0])
                 else:
