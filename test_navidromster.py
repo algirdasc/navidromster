@@ -11,22 +11,31 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class StubNavidrome(BaseHTTPRequestHandler):
+    def do_POST(self):
+        assert urllib.parse.urlparse(self.path).path == "/auth/login", self.path
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        assert body == {"username": "u", "password": "p"}, body
+        self._json({"token": "tok"})
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
-        assert {"u", "p"} <= set(q) and q["p"][0].startswith("enc:"), "missing Subsonic auth params"
         assert "Mozilla" in self.headers.get("User-Agent", ""), "missing browser User-Agent"
-        if url.path == "/rest/getPlaylists":
-            self._json({"subsonic-response": {"status": "ok", "playlists": {"playlist": [
-                {"id": "pl1", "name": "Party", "songCount": 1}]}}})
-        elif url.path == "/rest/getPlaylist":
-            self._json({"subsonic-response": {"status": "ok", "playlist": {"entry": [
+        if url.path.startswith("/rest/"):
+            assert {"u", "p"} <= set(q) and q["p"][0].startswith("enc:"), "missing Subsonic auth params"
+        if url.path == "/api/playlist/pl1/tracks":
+            assert self.headers.get("X-ND-Authorization") == "Bearer tok"
+            self._json([
                 {"id": "s1", "artist": "ABBA", "title": "Waterloo", "year": 1974},
-                {"id": "s2", "artist": "ABBA", "title": "Waterloo (Remaster)", "year": 2001,
-                 "albumId": "a1"}]}}})
+                {"id": "s2", "artist": "ABBA", "title": "Waterloo (Remaster)",
+                 "year": 2001, "date": "2001-05-06", "originalDate": "1974-03-04"},
+                {"id": "s3", "artist": "ABBA", "title": "Untagged", "year": 0, "albumId": "a1"}])
         elif url.path == "/rest/getAlbum":
             self._json({"subsonic-response": {"status": "ok", "album": {
-                "id": "a1", "originalReleaseDate": {"year": 1974, "month": 3, "day": 4}}}})
+                "id": "a1", "originalReleaseDate": {"year": 1973, "month": 7, "day": 6}}}})
+        elif url.path == "/rest/getPlaylists":
+            self._json({"subsonic-response": {"status": "ok", "playlists": {"playlist": [
+                {"id": "pl1", "name": "Party", "songCount": 1}]}}})
         elif url.path == "/rest/stream":
             if q["id"][0] != "s1":
                 self.send_error(404)
@@ -86,7 +95,8 @@ def main():
 
     songs = json.load(authed("/playlist?id=pl1"))
     assert songs == [{"id": "s1", "artist": "ABBA", "title": "Waterloo", "year": 1974},
-                     {"id": "s2", "artist": "ABBA", "title": "Waterloo (Remaster)", "year": 1974}], songs
+                     {"id": "s2", "artist": "ABBA", "title": "Waterloo (Remaster)", "year": "1974-03-04"},
+                     {"id": "s3", "artist": "ABBA", "title": "Untagged", "year": "1973-07-06"}], songs
 
     assert urllib.request.urlopen(base + "/stream?s=s1").read() == b"X" * 100
 
