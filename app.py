@@ -324,9 +324,17 @@ def make_handler():
                     ]), "application/json")
                 elif url.path == "/playlist":
                     pl = navidrome_json("getPlaylist", id=q["id"][0]).get("playlist", {})
+                    # ponytail: one getAlbum per unique album, no persistent cache; add one if playlist loads get slow
+                    orig_years = {}
+                    for s in pl.get("entry", []):
+                        aid = s.get("albumId")
+                        if aid and aid not in orig_years:
+                            al = navidrome_json("getAlbum", id=aid).get("album", {})
+                            orig_years[aid] = (al.get("originalReleaseDate") or {}).get("year")
                     self.send_body(json.dumps([
                         {"id": s["id"], "artist": s.get("artist", "?"),
-                         "title": s.get("title", "?"), "year": s.get("year", "?")}
+                         "title": s.get("title", "?"),
+                         "year": orig_years.get(s.get("albumId")) or s.get("year", "?")}
                         for s in pl.get("entry", [])
                     ]), "application/json")
                 elif url.path == "/stream":

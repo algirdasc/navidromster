@@ -21,7 +21,12 @@ class StubNavidrome(BaseHTTPRequestHandler):
                 {"id": "pl1", "name": "Party", "songCount": 1}]}}})
         elif url.path == "/rest/getPlaylist":
             self._json({"subsonic-response": {"status": "ok", "playlist": {"entry": [
-                {"id": "s1", "artist": "ABBA", "title": "Waterloo", "year": 1974}]}}})
+                {"id": "s1", "artist": "ABBA", "title": "Waterloo", "year": 1974},
+                {"id": "s2", "artist": "ABBA", "title": "Waterloo (Remaster)", "year": 2001,
+                 "albumId": "a1"}]}}})
+        elif url.path == "/rest/getAlbum":
+            self._json({"subsonic-response": {"status": "ok", "album": {
+                "id": "a1", "originalReleaseDate": {"year": 1974, "month": 3, "day": 4}}}})
         elif url.path == "/rest/stream":
             if q["id"][0] != "s1":
                 self.send_error(404)
@@ -80,7 +85,8 @@ def main():
     assert pls == [{"id": "pl1", "name": "Party", "songCount": 1}], pls
 
     songs = json.load(authed("/playlist?id=pl1"))
-    assert songs == [{"id": "s1", "artist": "ABBA", "title": "Waterloo", "year": 1974}], songs
+    assert songs == [{"id": "s1", "artist": "ABBA", "title": "Waterloo", "year": 1974},
+                     {"id": "s2", "artist": "ABBA", "title": "Waterloo (Remaster)", "year": 1974}], songs
 
     assert urllib.request.urlopen(base + "/stream?s=s1").read() == b"X" * 100
 
