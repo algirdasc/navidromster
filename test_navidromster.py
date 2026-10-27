@@ -26,8 +26,8 @@ class StubNavidrome(BaseHTTPRequestHandler):
         if url.path == "/api/playlist/pl1/tracks":
             assert self.headers.get("X-ND-Authorization") == "Bearer tok"
             self._json([
-                {"id": "s1", "artist": "ABBA", "title": "Waterloo", "year": 1974},
-                {"id": "s2", "artist": "ABBA", "title": "Waterloo (Remaster)",
+                {"id": "pt1", "mediaFileId": "s1", "artist": "ABBA", "title": "Waterloo", "year": 1974},
+                {"id": "pt2", "mediaFileId": "s2", "artist": "ABBA", "title": "Waterloo (Remaster)",
                  "year": 2001, "date": "2001-05-06", "originalDate": "1974-03-04"},
                 {"id": "s3", "artist": "ABBA", "title": "Untagged", "year": 0, "albumId": "a1"}])
         elif url.path == "/rest/getAlbum":
