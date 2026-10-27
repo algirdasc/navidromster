@@ -419,7 +419,7 @@ def make_handler():
                             d = navidrome_json("getAlbum", id=aid).get("album", {}).get("originalReleaseDate") or {}
                             album_dates[aid] = ("-".join([str(d["year"])] + [f"{d[k]:02d}" for k in ("month", "day") if d.get(k)])
                                                 if d.get("year") else None)
-                    songs = [{"id": t["id"], "artist": t.get("artist", "?"), "title": t.get("title", "?"),
+                    songs = [{"id": t.get("mediaFileId", t["id"]), "artist": t.get("artist", "?"), "title": t.get("title", "?"),
                               "year": t.get("originalDate") or t.get("year")
                                       or album_dates.get(t.get("albumId")) or "?"}
                              for t in tracks]
