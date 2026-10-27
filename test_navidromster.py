@@ -129,6 +129,10 @@ def main():
 
     assert urllib.request.urlopen(base + "/stream?s=s1").read() == b"X" * 100
 
+    assert urllib.request.urlopen(base + "/stream?s=pt1").read() == b"X" * 100
+
+    assert urllib.request.urlopen(base + "/stream?s=s1").read() == b"X" * 100
+
     req = urllib.request.Request(base + "/stream?s=s1", headers={"Range": "bytes=0-9"})
     with urllib.request.urlopen(req) as r:
         assert r.status == 206, r.status

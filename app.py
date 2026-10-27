@@ -340,6 +340,20 @@ def playlist_tracks(playlist_id):
         return json.load(r)
 
 
+LEGACY_IDS = {}
+
+
+def resolve_song_id(track_id):
+    # shortcut: grows by one entry per playlist track, only fetched on legacy-id misses
+    if track_id in LEGACY_IDS:
+        return LEGACY_IDS[track_id]
+    for p in navidrome_json("getPlaylists").get("playlists", {}).get("playlist", []):
+        for t in playlist_tracks(p["id"]):
+            if t.get("mediaFileId"):
+                LEGACY_IDS.setdefault(t["id"], t["mediaFileId"])
+    return LEGACY_IDS.get(track_id, track_id)
+
+
 def make_handler():
     class Handler(BaseHTTPRequestHandler):
         def send_body(self, body, content_type, status=200):
@@ -439,6 +453,16 @@ def make_handler():
 
         def stream(self, song_id):
             log.info("stream: song %s", song_id)
+            try:
+                self.pipe(song_id)
+            except urllib.error.HTTPError:
+                resolved = resolve_song_id(song_id)
+                if resolved == song_id:
+                    raise
+                log.info("stream: legacy id %s -> %s", song_id, resolved)
+                self.pipe(resolved)
+
+        def pipe(self, song_id):
             req = navidrome("stream", id=song_id, format=STREAM_FORMAT)
             if self.headers.get("Range"):
                 req.add_header("Range", self.headers["Range"])
